@@ -126,7 +126,7 @@ def analyze_gps_data(file_path):
 
 
 
-file_path = 'data/2016_1101.csv'
+file_path = 'filtered_orders.csv'
 results = analyze_gps_data(file_path)
 
 # 您可以接下来使用 'results' 字典中的数据进行进一步的处理和分析
@@ -135,6 +135,6 @@ if results:
         results['outliers'].to_csv('outliers.csv', index=False)
         print("\n异常值数据已保存到 'outliers.csv'")
 
-    if 'sampling_interval_stats' in results and not results['sampling_interval_stats'].empty:
-        results['sampling_interval_stats'].to_csv('sampling_interval_stats.csv')
-        print("GPS采样间隔统计数据已保存到 'sampling_interval_stats.csv'")
+    # if 'sampling_interval_stats' in results and not results['sampling_interval_stats'].empty:
+    #     results['sampling_interval_stats'].to_csv('sampling_interval_stats.csv')
+    #     print("GPS采样间隔统计数据已保存到 'sampling_interval_stats.csv'")
