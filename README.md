@@ -18,11 +18,13 @@
 - 订单中gps序列点集(移除重复点)必须大于 $n = 20$
 - 订单中gps轨迹总长度必须大于 $L = 1000m$
 
+### 问题
+由于gps的噪声导致“序列回环”的问题
+![abnormal_data.png](doc/abnormal_data.png)
 
 ### 任务
-- 编写对订单gps数据降采样的代码
-- 编写对订单gps添加高斯噪声的代码
-- 观测订单异常数据分布
+- 获取真实标签和误差计算
+
 
 ### Ai研究提示参考
 https://aistudio.google.com/app/prompts?state=%7B%22ids%22%3A%5B%221qsHiuIUOVwMPOPaSZdgG0wyyfqmgKtO1%22%5D%2C%22action%22%3A%22open%22%2C%22userId%22%3A%22116399421483494854687%22%2C%22resourceKeys%22%3A%7B%7D%7D&usp=drive_link
