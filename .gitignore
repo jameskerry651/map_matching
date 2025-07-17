@@ -3,3 +3,6 @@
 .idea
 /data
 *.csv
+/fmm
+/ch_font
+/osrm_mapdata

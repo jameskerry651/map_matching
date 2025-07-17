@@ -5,11 +5,40 @@
 
 - k_shortest_paths.py : 实现计算k条最短路径，并保存为csv文件
 - roadnetwork_download.py : 实现下载openstreetmap的路网数据，保存为road_network_edges.csv和road_network_nodes.csv，并将路网可视化图像数据保存为road_network_map.png.
-- data_vis.ipynb : 实现数据的随机采样，根据数量，订单，司机采样
+- data_vis.ipynb : 实现数据的随机采样，根据数量，订单，司机采样,订单中gps时间和距离差值分布图
+- osrm_result_statics.ipynb: 观测开源map matching匹配结果，可视化误差直方图
+- sample_abnormal_path.ipynb： 采样map matching异常订单
+- osrm_map_matching.py： 给出过滤异常数据的gps序列，调用开源map matching算法，输出结果csv文件
+- dete_abnormal_data.ipynb： 过滤原始gps数据中的异常数据，输出过滤后的csv文件
+- downsample_addnoise.ipynb：给过滤后的数据添加噪声或降采样
 
 ### 匹配真值计算思路
 
-根据每个订单为一次匹配，将未降采样的匹配结果作为真值
+弗雷歇距离（Frechet Distance）衡量的是“原始GPS轨迹”与“地图匹配后的轨迹”这两条路径在形状上的相似程度。
+为什么弗雷歇距离比平均逐点误差更优越？
+
+考虑以下两种情况：
+情况A：匹配路径与原始路径平行且紧邻，但整体向右平移了10米。
+
+情况B：匹配路径与原始路径在大部分地方重合，但在中间有一个点因为信号漂移而偏离了100米。
+
+如果只看平均逐点误差：
+
+在情况A中，平均误差大约是10米。
+
+在情况B中，假设轨迹很长，一个100米的误差点被大量0误差的点平均后，最终的平均误差可能也只有10米左右。
+显然，只看平均误差，我们无法区分这两种性质完全不同的错误。
+
+但如果使用弗雷歇距离：
+在情况A中，因为两条路径形状完全一样，只是平移了，所以弗雷歇距离就是10米（“狗绳”长度一直保持在10米）。
+在情况B中，为了跨越那个100米的偏离点，“狗绳”必须至少被拉长到100米。因此，弗雷歇距离至少是100米。
+通过弗雷歇距离，我们能够清晰地识别出情况B是一个更严重的“形状”错误。
+
+
+### Seq2Seq
+原本打算给模型输入定长gps序列和不定长的点的参考路段，然后输出参考路段的概率值，将最大的概率路段作为首选，如果无法联通，再从次概率选择
+
+新思路：直接输入两个点之间的多条最短路径作为参考，输出路径的概率值，直接实现端到端的匹配
 
 
 ### 异常数据判定
@@ -24,7 +53,13 @@
 
 ### 任务
 - 获取真实标签和误差计算
+- 观察匹配结果的误差数据分布，比如长短和点数之间的差异
 
+
+### 开源地图匹配服务使用教程
+1. 安装容器服务，详细参考https://github.com/jameskerry651/osrm-backend?tab=readme-ov-file
+2. 在osrm_mapdata文件夹中启动容器服务docker run -t -i -p 5000:5000 -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/berlin-latest.osrm
+3. 修改osrm_map_matching.py，调整文件输入路径参数后执行代码即可获得匹配结果
 
 ### 统计
 

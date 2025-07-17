@@ -1,5 +1,5 @@
 import osmnx as ox
-
+import os
 # 青岛 bbox = (120.0215, 35.8679, 120.4932, 36.1673)
 
 # 成都
@@ -56,3 +56,27 @@ fig.savefig(image_filepath, dpi=300, format='png', bbox_inches='tight', pad_inch
 
 print(f"路网图像已保存到: {image_filepath}")
 print("\n所有任务完成！")
+
+def save_graph_shapefile_directional(G, filepath=None, encoding="utf-8"):
+    # default filepath if none was provided
+    if filepath is None:
+        filepath = os.path.join(ox.settings.data_folder, "graph_shapefile")
+
+    # if save folder does not already exist, create it (shapefiles
+    # get saved as set of files)
+    if not filepath == "" and not os.path.exists(filepath):
+        os.makedirs(filepath)
+    filepath_nodes = os.path.join(filepath, "nodes.shp")
+    filepath_edges = os.path.join(filepath, "edges.shp")
+
+    # convert undirected graph to gdfs and stringify non-numeric columns
+    gdf_nodes, gdf_edges = ox.utils_graph.graph_to_gdfs(G)
+    gdf_nodes = ox.io._stringify_nonnumeric_cols(gdf_nodes)
+    gdf_edges = ox.io._stringify_nonnumeric_cols(gdf_edges)
+    # We need an unique ID for each edge
+    gdf_edges["fid"] = gdf_edges.index
+    # save the nodes and edges as separate ESRI shapefiles
+    gdf_nodes.to_file(filepath_nodes, encoding=encoding)
+    gdf_edges.to_file(filepath_edges, encoding=encoding)
+
+print("osmnx version",ox.__version__)

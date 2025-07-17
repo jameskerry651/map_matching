@@ -134,7 +134,3 @@ if results:
     if not results['outliers'].empty:
         results['outliers'].to_csv('outliers.csv', index=False)
         print("\n异常值数据已保存到 'outliers.csv'")
-
-    # if 'sampling_interval_stats' in results and not results['sampling_interval_stats'].empty:
-    #     results['sampling_interval_stats'].to_csv('sampling_interval_stats.csv')
-    #     print("GPS采样间隔统计数据已保存到 'sampling_interval_stats.csv'")
