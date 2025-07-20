@@ -51,9 +51,13 @@
 由于gps的噪声导致“序列回环”的问题
 ![abnormal_data.png](doc/abnormal_data.png)
 
+### 数据集制作
+一个csv文件，包含列\[gps_id, order_id,driver_id,gps_time,longitude, latitude, ture_candidate_osmid, candidate_road_osmid \]
+
 ### 任务
 - 获取真实标签和误差计算
-- 观察匹配结果的误差数据分布，比如长短和点数之间的差异
+- 给匹配结果误差绘制箱形图
+- 构建参考路段的数据集
 
 
 ### 开源地图匹配服务使用教程
