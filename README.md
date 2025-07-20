@@ -52,7 +52,12 @@
 ![abnormal_data.png](doc/abnormal_data.png)
 
 ### 数据集制作
-一个csv文件，包含列\[gps_id, order_id,driver_id,gps_time,longitude, latitude, ture_candidate_osmid, candidate_road_osmid \]
+一个csv文件，包含列\[gps_id, order_id,driver_id,gps_time,longitude, latitude, ture_candidate_osmid, candidate_roads_osmid \]
+
+### Prompt
+帮我编写python代码，我需要制作map matching的csv文件格式的数据集，这个数据集包含列有：[gps_id, order_id,driver_id,gps_time,longitude, latitude, ture_candidate_osmid, ture_candidate_geometry, candidate_roads_osmid ];  
+我的gps轨迹文件为original_trajectories_under_70m_diff.csv，包含的列有：['driver_id', 'order_id', 'gps_time', 'longitude', 'latitude','time_diff']；
+路网文件为road_network_edges.csv(基于osmnx下载导出)，包含的列有：['u', 'v', 'key', 'osmid', 'highway', 'lanes', 'name', 'oneway','reversed', 'length', 'bridge', 'ref', 'service', 'access', 'junction', 'maxspeed', 'tunnel', 'width', 'landuse', 'geometry']。 我的匹配结果文件是matched_trajectories_under_70m_diff.csv， 其中包含的列有：['order_id', 'driver_id', 'matched_longitude', 'matched_latitude','point_sequence', 'total_order_distance_m', 'total_order_duration_s','order_avg_confidence']。 true_candidate 表示真值，原始gps的匹配gps使用最近的matched_gps，根据'matched_longitude', 'matched_latitude'所在的road作为真值，
 
 ### 任务
 - 获取真实标签和误差计算
