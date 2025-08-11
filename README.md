@@ -66,7 +66,7 @@
 
 
 ### 开源地图匹配服务使用教程
-1. 安装容器服务，详细参考https://github.com/jameskerry651/osrm-backend?tab=readme-ov-file
+1. 安装容器服务，详细参考https://github.com/jameskerry651/osrm-backend?tab=readme-ov-file 和 另一个README_osmp.md文档
 2. 在osrm_mapdata文件夹中启动容器服务docker run -t -i -p 5000:5000 -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend osrm-routed --algorithm mld /data/berlin-latest.osrm
 3. 修改osrm_map_matching.py，调整文件输入路径参数后执行代码即可获得匹配结果
 

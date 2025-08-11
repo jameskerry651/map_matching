@@ -3,6 +3,8 @@
 .idea
 /data
 *.csv
+*.pyc
 /fmm
 /ch_font
 /osrm_mapdata
+/docker_volume
