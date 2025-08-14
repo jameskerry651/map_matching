@@ -12,6 +12,23 @@
 - dete_abnormal_data.ipynb： 过滤原始gps数据中的异常数据，输出过滤后的csv文件
 - downsample_addnoise.ipynb：给过滤后的数据添加噪声或降采样
 
+### 数据pipeline
+1. 执行roadnetwork_download.py 下载路网，获得road_network_nodes.csv和road_network_edges.csv
+2. 执行dete_abnormal_data.ipynb 将2016_1101_m.csv异常订单数据过滤掉，获得filtered_orders.csv和filtered_sampled_orders.csv【异常数据采样用于抽样观测】
+3. 提前部署docker上的开源mm算法，执行osrm_map_matching.py，输入 获得filtered_orders.csv 输出匹配结果：matched_points_for_qgis.csv
+4. 执行osrm_result_statics.ipynb分析匹配结果和匹配误差分布，输出误差分析结果map_matching_error_analysis.csv
+5. 执行rm_abnormal_matched.ipynb，根据map_matching_error_analysis.csv过滤异常匹配订单，输出original_trajectories_under_50m_diff.csv和matched_trajectories_under_50m_diff.csv
+
+### map matching 新方案
+由于之前的开源项目匹配结果差强人意，准备更换新的方案https://github.com/graphhopper/graphhopper/tree/master/map-matching 测试
+如果能通过样本'108cd2ffb049a7953483fec57f1fb0a9'的测试应该效果可以满足
+该样本存在一定回环,具体如图：
+
+<center>
+<img src="doc/ab_sample.png" width="60%" />
+</center>
+
+
 ### 匹配真值计算思路
 
 弗雷歇距离（Frechet Distance）衡量的是“原始GPS轨迹”与“地图匹配后的轨迹”这两条路径在形状上的相似程度。
@@ -47,9 +64,15 @@
 - 订单中gps序列点集(移除重复点)必须大于 $n = 20$
 - 订单中gps轨迹总长度必须大于 $L = 1000m$
 
+### 匹配真值计算标准
+- 匹配点半径15m内必须有路网
+- 匹配结果和原始路径的长度差不能超过60m
+
 ### 问题
 由于gps的噪声导致“序列回环”的问题
-![abnormal_data.png](doc/abnormal_data.png)
+<center>
+<img src="doc/abnormal_data.png" width="60%" />
+</center>
 
 ### 数据集制作
 一个csv文件，包含列\[gps_id, order_id,driver_id,gps_time,longitude, latitude, ture_candidate_osmid, candidate_roads_osmid \]

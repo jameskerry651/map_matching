@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import geopandas as gpd
+from shapely.geometry import Point
 
 def filter_gps_data_by_interval(df: pd.DataFrame, time_threshold: int = 4) -> pd.DataFrame:
     """
@@ -300,3 +302,68 @@ def filter_orders_by_max_segment_distance(df: pd.DataFrame, max_segment_meters: 
     result_df = df[df['order_id'].isin(orders_to_keep)].copy()
 
     return result_df
+
+def filter_abnormal_by_roadnetwork(orders_df,road_network_path):
+    """
+    过滤异常出租车轨迹订单数据。
+
+    如果一个订单的任何一个GPS点15米半径内没有路网，则该订单被视为异常并被移除。
+
+    参数:
+        orders_df (pd.DataFrame): 包含出租车订单数据的DataFrame。
+                                  必须包含 ['order_id', 'longitude', 'latitude'] 列。
+        road_network_path (str): OSMNX导出的路网CSV文件的路径。
+
+    返回:
+        pd.DataFrame: 过滤后的出租车订单数据DataFrame。
+    """
+    # 1. 加载路网数据并转换为GeoDataFrame
+    road_network_df = pd.read_csv(road_network_path)
+    # 从WKT格式的'geometry'列创建几何图形
+    # OSMnx 导出的 geometry 列通常是 Well-Known Text (WKT) 格式
+    road_network_gdf = gpd.GeoDataFrame(
+        road_network_df,
+        geometry=gpd.GeoSeries.from_wkt(road_network_df['geometry']),
+        crs="EPSG:4326"  # 假设原始坐标系为WGS84
+    )
+
+    # 2. 将订单数据转换为GeoDataFrame
+    # 从经纬度创建几何图形点
+    geometry = [Point(xy) for xy in zip(orders_df['longitude'], orders_df['latitude'])]
+    orders_gdf = gpd.GeoDataFrame(
+        orders_df,
+        geometry=geometry,
+        crs="EPSG:4326"  # 假设原始坐标系为WGS84
+    )
+
+    # 3. 转换坐标系以进行精确的米单位缓冲
+    # 选择一个合适的UTM区域，这里以一个示例区域为例，您可能需要根据数据所在地区进行调整
+    # 例如，对于中国大部分地区，可以选择一个通用的UTM区域或者根据省份选择
+    # 这里我们估算一个中心点并获取其UTM区域
+    utm_crs = orders_gdf.estimate_utm_crs()
+    orders_gdf_proj = orders_gdf.to_crs(utm_crs)
+    road_network_gdf_proj = road_network_gdf.to_crs(utm_crs)
+
+    # 4. 为每个GPS点创建15米的缓冲区
+    orders_gdf_proj['buffer'] = orders_gdf_proj.geometry.buffer(10)
+
+    # 5. 使用空间连接（spatial join）检查缓冲区和路网的相交情况
+    # 将缓冲区设置为主要的几何列进行连接
+    orders_gdf_proj = orders_gdf_proj.set_geometry('buffer')
+
+    # 'inner'连接会保留所有缓冲区与路网相交的点
+    # 我们需要找到不相交的点，所以先进行'left'连接，然后检查未匹配上的
+    join_result = gpd.sjoin(orders_gdf_proj, road_network_gdf_proj, how="left", predicate="intersects")
+
+    # 6. 识别包含异常点的订单ID
+    # 如果'index_right'列为NaN，说明该点没有与任何道路相交
+    abnormal_points = join_result[join_result['index_right'].isna()]
+    abnormal_order_ids = abnormal_points['order_id'].unique()
+    print(abnormal_order_ids)
+
+    print(f"发现 {len(abnormal_order_ids)} 个异常订单ID。")
+
+    # 7. 从原始DataFrame中过滤掉所有异常订单
+    filtered_orin_df = orders_df[~orders_df['order_id'].isin(abnormal_order_ids)]
+
+    return filtered_orin_df
