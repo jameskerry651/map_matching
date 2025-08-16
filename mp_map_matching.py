@@ -3,15 +3,18 @@ from leuvenmapmatching.map.inmem import InMemMap
 from leuvenmapmatching.matcher.distance import DistanceMatcher
 import pandas as pd
 from typing import Optional
-from tqdm import tqdm
-import concurrent.futures
+import os  # 导入os模块以获取CPU核心数
+
+# --- 数据转换函数 (稍作优化) ---
+def convert_df_to_trajectory(df: pd.DataFrame) -> list[tuple]:
+    """将DataFrame转换为轨迹点列表，使用.values提高效率"""
+    # to_numpy() 或 .values 比 iterrows() 快得多
+    trajectory = df[['latitude', 'longitude']].to_numpy().tolist()
+    # 确保内部是元组 (latitude, longitude)
+    return [tuple(point) for point in trajectory]
 
 
-def convert_df_to_trajectory(df):
-    # Convert dataframe to a trajectory (list of tuples with latitude, longitude)
-    return [(float(row['latitude']), float(row['longitude'])) for _, row in df.iterrows()]
-
-
+# --- 图和地图构建函数 (保持不变) ---
 def create_graph_from_csvs(nodes_filepath: str,
                            edges_filepath: str,
                            node_id_col: str = 'osmid',
@@ -20,77 +23,85 @@ def create_graph_from_csvs(nodes_filepath: str,
                            edge_key_col: Optional[str] = 'key',
                            crs: str = 'epsg:4326') -> InMemMap:
     """
-    Create a graph from CSV files containing nodes and edges.
+    从节点和边的 CSV 文件创建一个 InMemMap 对象。
+    (此函数逻辑不变，因为它是一次性设置)
     """
     try:
-        nodes_df = pd.read_csv(nodes_filepath)
+        nodes_df = pd.read_csv(nodes_filepath, index_col=node_id_col)
         edges_df = pd.read_csv(edges_filepath)
     except FileNotFoundError as e:
-        print(f"Error: File not found - {e}")
+        print(f"错误：文件未找到 - {e}")
         raise
+    except KeyError:
+        # 如果index_col指定的列不存在，pandas会抛出KeyError
+        raise KeyError(f"错误：节点文件中未找到指定的节点ID列 '{node_id_col}'。")
 
     G = nx.MultiDiGraph()
 
-    # Add nodes
-    if node_id_col not in nodes_df.columns:
-        raise KeyError(f"Node ID column '{node_id_col}' not found.")
-    nodes_df = nodes_df.set_index(node_id_col)
+    # 添加节点 (更高效的方式)
     for node_id, data in nodes_df.iterrows():
         G.add_node(node_id, **data.to_dict())
 
-    # Add edges
-    if edge_u_col not in edges_df.columns or edge_v_col not in edges_df.columns:
-        raise KeyError(f"Edge columns '{edge_u_col}' or '{edge_v_col}' not found.")
+    # 添加边 (更高效的方式)
     for _, row in edges_df.iterrows():
         u, v = row[edge_u_col], row[edge_v_col]
         attributes = row.to_dict()
-        attributes.pop(edge_u_col)
-        attributes.pop(edge_v_col)
+        attributes.pop(edge_u_col, None)
+        attributes.pop(edge_v_col, None)
         key = attributes.pop(edge_key_col, 0) if edge_key_col else 0
         G.add_edge(u, v, key=key, **attributes)
 
     G.graph['crs'] = crs
-    print(f"Graph created successfully with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges.")
+    print(f"图创建成功！包含 {G.number_of_nodes()} 个节点和 {G.number_of_edges()} 条边。")
 
-    # Create InMemMap object
     map_con = InMemMap("leuven_map", use_latlon=True, use_rtree=True, index_edges=True)
     for node_id, node_data in G.nodes(data=True):
-        map_con.add_node(node_id, (node_data['y'], node_data['x']))  # y=lat, x=lon
-
-    for u, v in G.edges(keys=False):
+        map_con.add_node(node_id, (node_data['y'], node_data['x']))
+    for u, v in G.edges():
         map_con.add_edge(u, v)
 
     return map_con
 
 
-def create_matcher(map_con: InMemMap) -> DistanceMatcher:
-    """
-    Create a map matcher using the InMemMap object.
-    """
-    return DistanceMatcher(
-        map_con=map_con,
+def create_matcher():
+    matcher = DistanceMatcher(
+        map_con=global_map_con,
         max_dist=100,
         obs_noise=15,
         min_prob_norm=0.001,
         non_emitting_states=True
     )
 
+    return matcher
 
-def process_order(order_id, df, matcher, map_con):
+
+def process_order(order_id: str, order_task: pd.DataFrame) -> pd.DataFrame:
     """
-    Process an individual order to match the trajectory to the graph.
+    处理单个订单的地图匹配任务。
+    这个函数将在子进程中执行。
     """
-    order_data = df[df['order_id'] == order_id]
+    order_data = order_task
+
+    # 1. 准备轨迹
     order_data_sorted = order_data.sort_values('gps_time')
     trajectory = convert_df_to_trajectory(order_data_sorted)
 
-    states, _ = matcher.match(trajectory, unique=False)
-    nodes = matcher.path_pred_onlynodes
+    # 如果轨迹为空，直接返回
+    if not trajectory:
+        print("空的轨迹")
+        return pd.DataFrame()
 
+    # 2. 地图匹配
+    local_matcher = create_matcher()
+
+    states, _ = local_matcher.match(trajectory, unique=False)
+    nodes = local_matcher.path_pred_onlynodes
+
+    # 3. 整理结果
     matched_data = []
     for i, node_id in enumerate(nodes):
         try:
-            lat, lon = map_con.node_coordinates(node_id)
+            lat, lon = global_map_con.node_coordinates(node_id)
             matched_data.append({
                 'sequence': i,
                 'order_id': order_id,
@@ -98,45 +109,54 @@ def process_order(order_id, df, matcher, map_con):
                 'matched_longitude': lon
             })
         except KeyError:
-            print(f"Warning: Coordinates for node {node_id} not found.")
+            # 在并行环境中，打印警告可能导致输出混乱，可以考虑记录到日志文件
+            # print(f"警告: 找不到节点 {node_id} 的坐标信息")
             continue
 
-    return matched_data, len(trajectory) != len(states)
+    matched_df = pd.DataFrame(matched_data)
+
+    return matched_df
 
 
-def main():
-    # Create the graph and matcher
-    map_con = create_graph_from_csvs('road_network_nodes.csv', 'road_network_edges.csv')
-    matcher = create_matcher(map_con)
+print(f"正在初始化地图...")
+global_map_con = create_graph_from_csvs('road_network_nodes.csv', 'road_network_edges.csv')
 
-    # Read the CSV file containing the orders
+if __name__ == '__main__':
+    print("正在读取订单数据...")
     csv_file = 'filtered_orders.csv'
     df = pd.read_csv(csv_file)
 
-    unique_order_ids = df['order_id'].unique()
-    result_df = pd.DataFrame()
+    # --- 2. 准备任务列表 ---
+    # 使用groupby来拆分DataFrame，这比循环过滤高效得多
+    # 我们创建一个(order_id, order_df)元组的列表作为任务
+    print("正在准备并行任务...")
+    tasks = list(df.groupby('order_id'))
+
+    total_orders = len(tasks)
+    print(f"共找到 {total_orders} 个独立订单，准备进行并行处理。")
+
+    # --- 3. 使用ProcessPoolExecutor进行并行处理 ---
+    results_list = []
     no_eq_count = 0
 
-    # Use concurrent.futures for parallel processing of orders
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        futures = {
-            executor.submit(process_order, order_id, df, matcher, map_con): order_id
-            for order_id in unique_order_ids
-        }
+    # 设置工作进程数量，可以根据你的CPU核心数调整
+    # os.cpu_count() or 1 确保在单核机器上也能工作
+    num_workers = max(1, os.cpu_count() - 1)  # 留一个核心给系统
+    print(f"启动 {num_workers} 个工作进程...")
 
-        for future in tqdm(concurrent.futures.as_completed(futures)):
-            matched_data, is_inconsistent = future.result()
-            matched_df = pd.DataFrame(matched_data)
-            result_df = pd.concat([result_df, matched_df])
+    # 使用tqdm显示进度
+    from tqdm.contrib.concurrent import process_map
 
-            if is_inconsistent:
-                no_eq_count += 1
+    # 使用process_map替代Pool.starmap，自带进度条
+    # 设置chunksize以提高多进程性能，根据任务数量和进程数调整
+    chunksize = max(1, len(tasks) // (num_workers * 2))
+    matched_df = process_map(process_order, *zip(*tasks), max_workers=num_workers, desc="匹配进度", chunksize=chunksize)
 
-    # Save the results to a CSV file
-    result_df.to_csv('matched_results.csv', index=False)
-    print(f"Processed {len(unique_order_ids)} orders.")
-    print(f"Number of orders with length mismatch: {no_eq_count}")
+    # 将matched_df列表合并为一个DataFrame
+    result_df = pd.concat(matched_df, ignore_index=True)
 
+    # 保存结果
+    result_df.to_csv('matched_results_parallel.csv', index=False)
+    print("结果已保存到 'matched_results_parallel.csv'")
 
-if __name__ == '__main__':
-    main()
+    print(f"共处理订单数量：{total_orders}")
