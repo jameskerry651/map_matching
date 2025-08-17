@@ -96,17 +96,19 @@ def process_order(order_id: str, order_task: pd.DataFrame) -> pd.DataFrame:
 
     states, _ = local_matcher.match(trajectory, unique=False)
     nodes = local_matcher.path_pred_onlynodes
-
+    total_distance_m = local_matcher.path_pred_distance()
     # 3. 整理结果
     matched_data = []
     for i, node_id in enumerate(nodes):
         try:
             lat, lon = global_map_con.node_coordinates(node_id)
             matched_data.append({
-                'sequence': i,
+                'point_sequence': i,
                 'order_id': order_id,
                 'matched_latitude': lat,
-                'matched_longitude': lon
+                'matched_longitude': lon,
+                'total_order_distance_m': total_distance_m,
+
             })
         except KeyError:
             # 在并行环境中，打印警告可能导致输出混乱，可以考虑记录到日志文件

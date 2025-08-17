@@ -115,7 +115,8 @@ def create_matcher(map_con:InMemMap) -> DistanceMatcher:
         max_dist=100,  # 观测点与路段的最大搜索距离（米）
         obs_noise=15,  # 观测噪声的标准差（米），代表GPS的误差范围
         min_prob_norm=0.001,
-        non_emitting_states=True  # 允许在稀疏轨迹点之间插入未匹配的路径
+        non_emitting_states=True,  # 允许在稀疏轨迹点之间插入未匹配的路径
+        only_edges=True
     )
 
     return map_matcher
@@ -191,6 +192,6 @@ if __name__ == '__main__':
 
 
 
-    matched_df.to_csv('matched_results.csv', index=False)
-    print("匹配结果已保存到 'matched_results.csv' 文件中。")
+    matched_df.to_csv('vis_matched_results.csv', index=False)
+    print("匹配结果已保存到 'vis_matched_results.csv' 文件中。")
     order_data_sorted.to_csv('original_gps_data.csv', index=False)

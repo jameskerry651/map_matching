@@ -15,7 +15,7 @@
 ### 数据pipeline
 1. 执行roadnetwork_download.py 下载路网，获得road_network_nodes.csv和road_network_edges.csv
 2. 执行dete_abnormal_data.ipynb 将2016_1101_m.csv异常订单数据过滤掉，获得filtered_orders.csv和filtered_sampled_orders.csv【异常数据采样用于抽样观测】
-3. 提前部署docker上的开源mm算法，执行osrm_map_matching.py，输入 获得filtered_orders.csv 输出匹配结果：matched_points_for_qgis.csv
+3. 执行mp_map_matching.py 将filtered_sampled_orders.csv 输入开源map matching算法，获得matched_results_parallel.csv
 4. 执行osrm_result_statics.ipynb分析匹配结果和匹配误差分布，输出误差分析结果map_matching_error_analysis.csv
 5. 执行rm_abnormal_matched.ipynb，根据map_matching_error_analysis.csv过滤异常匹配订单，输出original_trajectories_under_50m_diff.csv和matched_trajectories_under_50m_diff.csv
 
